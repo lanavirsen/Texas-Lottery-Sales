@@ -1785,6 +1785,8 @@ long_format_df.to_csv('sales_pivot_table_.csv', index=False)
 
 ![Figure 4](https://github.com/lanavirsen/Texas-Lottery-Sales/blob/main/images/Figure4.png)
 
+[Click here to view the interactive Tableau visualization](https://public.tableau.com/views/WorkinProgress_17110691588590/MasterView?:language=en-US&publish=yes&:sid=&:display_count=n&:origin=viz_share_link) 
+
 **The dashboard consists of the following features:**
 *(From top to bottom)*
 
