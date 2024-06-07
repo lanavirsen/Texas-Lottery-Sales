@@ -1,4 +1,4 @@
-# :tickets: Texas Lottery Sales Project
+# :tickets: Texas Lottery Sales Analysis
 
 ## Introduction
 
