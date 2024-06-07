@@ -1458,3 +1458,348 @@ Output:
 ![Figure 3](https://github.com/lanavirsen/Texas-Lottery-Sales/blob/main/images/Figure3.png)
 
 According to our plot for the years 2021-2023, we can observe a rapid increase in ticket prices starting from January and peaking between April and June. From there, the price remains relatively stable or slightly decreases until the next winter.
+
+## 10. Optimization and Export for Tableau
+
+### 10.1. Aggregation
+
+Aggregating the data to reduce the dataset size and make it suitable for use in Tableau:
+
+```python
+# Performing the aggregation.
+monthly_agg = reduced_dask_dataframe.groupby([
+    'Retailer Location County',
+    'Retailer Location City',
+    'Game Category',
+    'Calendar Year',
+    'Calendar Month'
+]).agg({
+    'Gross Ticket Sales Amount': 'sum',
+    'Net Ticket Sales Amount': 'sum',
+    'Promotional Tickets Amount': 'sum',
+    'Cancelled Tickets Amount': 'sum',
+    'Ticket Returns Amount': 'sum',
+    'Ticket Price': 'sum'
+})
+
+# Computing the result to get a Pandas DataFrame.
+monthly_df = monthly_agg.compute()
+
+# Resetting the index to turn the grouped columns into regular columns.
+monthly_df_reset = monthly_df.reset_index()
+```
+
+Removing the `Ticket Price` column, as it contains data for only one game category and thus won't be used in the Tableau dashboard:
+
+```python
+monthly_df_reset = monthly_df_reset.drop(columns=['Ticket Price'])
+```
+
+### 10.2. Imputing Missing Values
+
+As observed earlier, our dataset contains data for only 250 out of the 254 Texas counties. These missing values will become evident on the Tableau dashboard.
+
+To address this, I will create a DataFrame with all possible combinations of Counties and Measurement Types. This will allow me to identify and impute the missing values, ensuring a complete and accurate representation on the dashboard.
+
+Below is the list of all counties in Texas:
+
+```python
+counties_list = [
+    'Anderson', 'Andrews', 'Angelina', 'Aransas', 'Archer', 'Armstrong', 
+    'Atascosa', 'Austin', 'Bailey', 'Bandera', 'Bastrop', 'Baylor', 'Bee',
+    'Bell', 'Bexar', 'Blanco', 'Borden', 'Bosque', 'Bowie', 'Brazoria',
+    'Brazos', 'Brewster', 'Briscoe', 'Brooks', 'Brown', 'Burleson', 'Burnet',
+    'Caldwell', 'Calhoun', 'Callahan', 'Cameron', 'Camp', 'Carson', 'Cass',
+    'Castro', 'Chambers', 'Cherokee', 'Childress', 'Clay', 'Cochran', 'Coke',
+    'Coleman', 'Collin', 'Collingsworth', 'Colorado', 'Comal', 'Comanche',
+    'Concho', 'Cooke', 'Coryell', 'Cottle', 'Crane', 'Crockett', 'Crosby',
+    'Culberson', 'Dallam', 'Dallas', 'Dawson', 'Deaf Smith', 'Delta', 'Denton',
+    'DeWitt', 'Dickens', 'Dimmit', 'Donley', 'Duval', 'Eastland', 'Ector',
+    'Edwards', 'Ellis', 'El Paso', 'Erath', 'Falls', 'Fannin', 'Fayette', 
+    'Fisher', 'Floyd', 'Foard', 'Fort Bend', 'Franklin', 'Freestone', 'Frio',
+    'Gaines', 'Galveston', 'Garza', 'Gillespie', 'Glasscock', 'Goliad',
+    'Gonzales', 'Gray', 'Grayson', 'Gregg', 'Grimes', 'Guadalupe', 'Hale',
+    'Hall', 'Hamilton', 'Hansford', 'Hardeman', 'Hardin', 'Harris', 'Harrison',
+    'Hartley', 'Haskell', 'Hays', 'Hemphill', 'Henderson', 'Hidalgo', 'Hill',
+    'Hockley', 'Hood', 'Hopkins', 'Houston', 'Howard', 'Hudspeth', 'Hunt',
+    'Hutchinson', 'Irion', 'Jack', 'Jackson', 'Jasper', 'Jeff Davis',
+    'Jefferson', 'Jim Hogg', 'Jim Wells', 'Johnson', 'Jones', 'Karnes',
+    'Kaufman', 'Kendall', 'Kenedy', 'Kent', 'Kerr', 'Kimble', 'King', 'Kinney',
+    'Kleberg', 'Knox', 'Lamar', 'Lamb', 'Lampasas', 'La Salle', 'Lavaca',
+    'Lee', 'Leon', 'Liberty', 'Limestone', 'Lipscomb', 'Live Oak', 'Llano',
+    'Loving', 'Lubbock', 'Lynn', 'McCulloch', 'McLennan', 'McMullen',
+    'Madison', 'Marion', 'Martin', 'Mason', 'Matagorda', 'Maverick', 'Medina',
+    'Menard', 'Midland', 'Milam', 'Mills', 'Mitchell', 'Montague',
+    'Montgomery', 'Moore', 'Morris', 'Motley', 'Nacogdoches', 'Navarro',
+    'Newton', 'Nolan', 'Nueces', 'Ochiltree', 'Oldham', 'Orange', 'Palo Pinto', 
+    'Panola', 'Parker', 'Parmer', 'Pecos', 'Polk', 'Potter', 'Presidio',
+    'Rains', 'Randall', 'Reagan', 'Real', 'Red River', 'Reeves', 'Refugio',
+    'Roberts', 'Robertson', 'Rockwall', 'Runnels', 'Rusk', 'Sabine',
+    'San Augustine', 'San Jacinto', 'San Patricio', 'San Saba', 'Schleicher',
+    'Scurry', 'Shackelford', 'Shelby', 'Sherman', 'Smith', 'Somervell',
+    'Starr', 'Stephens', 'Sterling', 'Stonewall', 'Sutton', 'Swisher',
+    'Tarrant', 'Taylor', 'Terrell', 'Terry', 'Throckmorton', 'Titus',
+    'Tom Green', 'Travis', 'Trinity', 'Tyler', 'Upshur', 'Upton', 'Uvalde',
+    'Val Verde', 'Van Zandt', 'Victoria', 'Walker', 'Waller', 'Ward',
+    'Washington', 'Webb', 'Wharton', 'Wheeler', 'Wichita', 'Wilbarger',
+    'Willacy', 'Williamson', 'Wilson', 'Winkler', 'Wise', 'Wood', 'Yoakum',
+    'Young', 'Zapata', 'Zavala'
+]
+```
+
+Generating a DataFrame of all possible combinations:
+
+```python
+# Getting unique values from relevant columns.
+game_categories = monthly_df_reset['Game Category'].unique()
+years = monthly_df_reset['Calendar Year'].unique()
+months = monthly_df_reset['Calendar Month'].unique()
+
+# Creating a DataFrame from the Cartesian product of the unique values
+# and the "counties_list".
+all_combinations = pd.MultiIndex.from_product(
+    [counties_list, game_categories, years, months], 
+    names=[
+        'Retailer Location County',
+        'Game Category',
+        'Calendar Year',
+        'Calendar Month'
+    ]
+).to_frame(index=False)
+```
+
+Merging with the original DataFrame to ensure all combinations are present:
+
+```python
+merged_df = pd.merge(
+    all_combinations,
+    monthly_df_reset,
+    on=[
+        'Retailer Location County',
+        'Game Category',
+        'Calendar Year',
+        'Calendar Month'
+    ],
+    how='outer'
+)
+```
+
+Cleaning out the rows that fall outside of our original time range:
+
+```python
+# Removing rows for 2020 up to and including August.
+merged_df = merged_df[
+    ~(
+        (merged_df['Calendar Year'] == 2020)
+        & (merged_df['Calendar Month'] <= 8)
+    )
+]
+
+# Removing rows for 2024 from February onwards.
+merged_df = merged_df[
+    ~(
+        (merged_df['Calendar Year'] == 2024)
+        & (merged_df['Calendar Month'] >= 2)
+    )
+]
+```
+
+Filling missing values for newly created rows:
+
+```python
+merged_df.fillna(
+    {
+        'Promotional Tickets Amount': 0,
+        'Cancelled Tickets Amount': 0, 
+        'Ticket Returns Amount': 0
+    },
+    inplace=True
+)
+```
+
+For the "Gross Ticket Sales Amount" and "Net Ticket Sales Amount" columns, I replace the missing values with the mean value based on the corresponding "Game Category", "Calendar Year", and "Calendar Month".
+
+```python
+# Calculating mean values.
+mean_values = (
+    monthly_df_reset
+    .groupby(['Game Category', 'Calendar Year', 'Calendar Month'])
+    [['Gross Ticket Sales Amount', 'Net Ticket Sales Amount']]
+    .mean()
+    .reset_index()
+)
+
+# Merging the mean values back into the merged DataFrame.
+merged_df = pd.merge(
+    merged_df,
+    mean_values,
+    on=['Game Category', 'Calendar Year', 'Calendar Month'],
+    how='left',
+    suffixes=('', '_mean')
+)
+
+# Replacing missing values with the mean.
+for column in ['Gross Ticket Sales Amount', 'Net Ticket Sales Amount']:
+    merged_df[column] = np.where(
+        merged_df[column].isna(),
+        merged_df[column + '_mean'],
+        merged_df[column]
+    )
+
+# Dropping the mean columns as they are no longer needed.
+merged_df.drop(
+    ['Gross Ticket Sales Amount_mean', 'Net Ticket Sales Amount_mean'],
+    axis=1,
+    inplace=True
+)
+```
+
+
+`merged_df` now contains our original data plus any missing combinations, with `Gross Ticket Sales Amount` and `Net Ticket Sales Amount` filled with mean values where necessary.
+
+```python
+merged_df.head()
+```
+
+Output:
+
+|  | Retailer Location County | Game Category | Calendar Year | Calendar Month | Retailer Location City | Gross Ticket Sales Amount | Net Ticket Sales Amount | Promotional Tickets Amount | Cancelled Tickets Amount | Ticket Returns Amount |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 0 | Anderson | All or Nothing™ | 2020 | 9 | Cayuga | 12 | 12 | 0 | 0 | 0 |
+| 1 | Anderson | All or Nothing™ | 2020 | 9 | Palestine | 3474 | 3474 | 0 | 0 | 0 |
+| 2 | Anderson | All or Nothing™ | 2020 | 9 | Elkhart | 1014 | 1014 | 0 | 0 | 0 |
+| 3 | Anderson | All or Nothing™ | 2020 | 9 | Grandview | 14 | 14 | 0 | 0 | 0 |
+| 4 | Anderson | All or Nothing™ | 2020 | 9 | Frankston | 408 | 408 | 0 | 0 | 0 |
+
+Saving the DataFrame to a CSV file:
+
+```python
+merged_df.to_csv('monthly_aggregation_imputed_.csv', index=False)
+```
+
+### 10.3. Creating a Pivot Table
+
+In the Tableau dashboard, I want to enable filtering by the following Measurement Types:
+
+- `Gross Ticket Sales Amount`
+- `Net Ticket Sales Amount`
+- `Promotional Tickets Amount`
+- `Cancelled Tickets Amount`
+- `Ticket Returns Amount`
+
+To achieve this, I will pivot these measurements into a single column.
+
+First, I'll remove the `Retailer Location City` column, as I'm not going to pivot to that level of granularity.
+
+```python
+merged_df = merged_df.drop(columns='Retailer Location City')
+```
+
+Checking the resulting table before proceeding:
+
+```python
+merged_df.head()
+```
+
+Output:
+
+|  | Retailer Location County | Game Category | Calendar Year | Calendar Month | Gross Ticket Sales Amount | Net Ticket Sales Amount | Promotional Tickets Amount | Cancelled Tickets Amount | Ticket Returns Amount |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 0 | Anderson | All or Nothing™ | 2020 | 9 | 12 | 12 | 0 | 0 | 0 |
+| 1 | Anderson | All or Nothing™ | 2020 | 9 | 3474 | 3474 | 0 | 0 | 0 |
+| 2 | Anderson | All or Nothing™ | 2020 | 9 | 1014 | 1014 | 0 | 0 | 0 |
+| 3 | Anderson | All or Nothing™ | 2020 | 9 | 14 | 14 | 0 | 0 | 0 |
+| 4 | Anderson | All or Nothing™ | 2020 | 9 | 408 | 408 | 0 | 0 | 0 |
+
+After removing the column, I will group the DataFrame by the remaining categorical columns and sum the numerical columns:
+
+```python
+grouped_df = merged_df.groupby([
+    'Retailer Location County', 
+    'Game Category', 
+    'Calendar Year', 
+    'Calendar Month'
+]).sum()
+
+# Resetting the index of the grouped DataFrame.
+grouped_df = grouped_df.reset_index()
+```
+
+Creating a pivot table:
+
+```python
+# Pivoting the sales amount columns into a long format.
+long_format_df = pd.melt(
+    frame=grouped_df, 
+    id_vars=[
+        'Retailer Location County',
+        'Game Category',
+        'Calendar Year',
+        'Calendar Month'
+    ], 
+    value_vars=[
+        'Gross Ticket Sales Amount', 
+        'Net Ticket Sales Amount', 
+        'Promotional Tickets Amount', 
+        'Cancelled Tickets Amount', 
+        'Ticket Returns Amount'
+    ],
+    var_name='Sales Type', 
+    value_name='Amount'
+)
+```
+
+The result:
+
+```python
+long_format_df.head()
+```
+
+Output:
+
+|  | Retailer Location County | Game Category | Calendar Year | Calendar Month | Sales Type | Amount |
+|---:|---:|---:|---:|---:|---:|---:|
+| 0 | Anderson | All or Nothing™ | 2020 | 9 | Gross Ticket Sales Amount | 5782 |
+| 1 | Anderson | All or Nothing™ | 2020 | 10 | Gross Ticket Sales Amount | 6070 |
+| 2 | Anderson | All or Nothing™ | 2020 | 11 | Gross Ticket Sales Amount | 6510 |
+| 3 | Anderson | All or Nothing™ | 2020 | 12 | Gross Ticket Sales Amount | 6608 |
+| 4 | Anderson | All or Nothing™ | 2021 | 1 | Gross Ticket Sales Amount | 6728 |
+
+Saving the DataFrame to a CSV file:
+
+```python
+long_format_df.to_csv('sales_pivot_table_.csv', index=False)
+```
+
+## Data Visualization with Tableau
+
+#### Objectives
+
+- Creating an interactive dashboard with the following features:
+    - Geographical visualization of lottery sales, allowing for filtering by Game Type, Measurement Type, and Month.
+    - Trends for gross and net sales, as well as for cancelled tickets, promotional tickets, and ticket returns over the entire registered period.
+    - List of top cities for the selected County, Game Type, Measure Type and Month.
+    - Percentage of net sales to gross sales.
+
+### Completed Tableau Dashboard
+
+![Figure 4](https://github.com/lanavirsen/Texas-Lottery-Sales/blob/main/images/Figure4.png)
+
+**The dashboard consists of the following features:**
+*(From top to bottom)*
+
+- **Sales Performance**: A horizontal bar chart of measure types.
+- **Lottery Sales by Geography**: A geographical visualization. Clicking on a county selects it and filters the rest of the information on the dashboard by that county. Multiple counties can be selected by holding down Ctrl (on Windows).
+- **Sales by City**: A list of cities sorted by the value for the selected measure type.
+- **Filters**: A slider for Month/Year and dropdown filters for measure type and game type.
+- **County**: A list of the currently selected counties.
+- **Performance**: The percentage of net sales to gross sales.
+- **Sales Trends** and **Ticket Adjustments Trends**: Trends for gross and net sales, as well as for cancelled tickets, promotional tickets, and ticket returns over the entire registered period.
+
+
+**Tables used:**
+
+*(Prepared and saved in the previous step)*
+
+- `monthly_aggregation_imputed_.csv`
+- `sales_pivot_table_.csv`
