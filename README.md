@@ -1,2 +1,2 @@
-# Texas-Lottery-Sales
+# :tickets: Texas Lottery Sales Project
 Work in progress.
